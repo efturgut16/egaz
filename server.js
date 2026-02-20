@@ -3,12 +3,24 @@ const { chromium } = require("playwright");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
+
+/* 🔥 CORS FIX */
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
+}));
+
+app.options("*", cors()); // Preflight için önemli
+
 app.use(express.json());
 
 app.post("/getPrice", async (req, res) => {
   const { city } = req.body;
-  if (!city) return res.status(400).json({ error: "city gerekli" });
+
+  if (!city) {
+    return res.status(400).json({ error: "city gerekli" });
+  }
 
   let browser;
 
@@ -24,7 +36,7 @@ app.post("/getPrice", async (req, res) => {
     await page.keyboard.type(city);
     await page.keyboard.press("Enter");
 
-    await page.waitForSelector("text=TL/lt");
+    await page.waitForSelector("text=TL/lt", { timeout: 20000 });
 
     const text = await page.textContent("body");
 
