@@ -1,5 +1,5 @@
 const express = require("express");
-const puppeteer = require("puppeteer");
+const { chromium } = require("playwright");
 
 const app = express();
 app.use(express.json());
@@ -9,32 +9,25 @@ app.post("/getPrice", async (req, res) => {
   if (!city) return res.status(400).json({ error: "city gerekli" });
 
   let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"]
-    });
 
+  try {
+    browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
     await page.goto("https://www.aygaz.com.tr/fiyatlar/otogaz", {
-      waitUntil: "networkidle2",
-      timeout: 60000
+      waitUntil: "networkidle"
     });
 
     await page.click("div[class*='control']");
     await page.keyboard.type(city);
     await page.keyboard.press("Enter");
 
-    await page.waitForFunction(
-      () => document.body.innerText.includes("TL/lt"),
-      { timeout: 20000 }
-    );
+    await page.waitForSelector("text=TL/lt");
 
-    const price = await page.evaluate(() => {
-      const match = document.body.innerText.match(/([0-9]+,[0-9]+)\s*TL\/lt/);
-      return match ? match[1] : null;
-    });
+    const text = await page.textContent("body");
+
+    const match = text.match(/([0-9]+,[0-9]+)\s*TL\/lt/);
+    const price = match ? match[1] : null;
 
     await browser.close();
 
@@ -55,5 +48,5 @@ app.post("/getPrice", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("Server çalışıyor...");
+  console.log("Server çalışıyor");
 });
