@@ -1,20 +1,28 @@
 const express = require("express");
 const { chromium } = require("playwright");
-const cors = require("cors");
 
 const app = express();
 
-/* 🔥 CORS FIX */
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"]
-}));
+/* =========================
+   🔥 MANUEL CORS AYARI
+   ========================= */
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "https://egazlpg.com");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  next();
+});
 
-app.options("*", cors()); // Preflight için önemli
+// Preflight request (OPTIONS) için
+app.options("*", (req, res) => {
+  res.sendStatus(200);
+});
 
 app.use(express.json());
 
+/* =========================
+   📌 FİYAT ENDPOINT
+   ========================= */
 app.post("/getPrice", async (req, res) => {
   const { city } = req.body;
 
@@ -29,38 +37,50 @@ app.post("/getPrice", async (req, res) => {
     const page = await browser.newPage();
 
     await page.goto("https://www.aygaz.com.tr/fiyatlar/otogaz", {
-      waitUntil: "networkidle"
+      waitUntil: "networkidle",
+      timeout: 60000
     });
 
+    // şehir seç
     await page.click("div[class*='control']");
     await page.keyboard.type(city);
     await page.keyboard.press("Enter");
 
+    // fiyatın gelmesini bekle
     await page.waitForSelector("text=TL/lt", { timeout: 20000 });
 
-    const text = await page.textContent("body");
+    const bodyText = await page.textContent("body");
 
-    const match = text.match(/([0-9]+,[0-9]+)\s*TL\/lt/);
+    const match = bodyText.match(/([0-9]+,[0-9]+)\s*TL\/lt/);
     const price = match ? match[1] : null;
 
     await browser.close();
 
-    if (!price) throw new Error("Fiyat bulunamadı");
+    if (!price) {
+      return res.status(500).json({ error: "Fiyat bulunamadı" });
+    }
 
-    res.json({
+    return res.json({
       city,
       price,
       unit: "TL/lt",
       date: new Date().toLocaleDateString("tr-TR")
     });
 
-  } catch (err) {
+  } catch (error) {
     if (browser) await browser.close();
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: "Sunucu hatası",
+      detail: error.message
+    });
   }
 });
 
+/* =========================
+   🚀 SERVER START
+   ========================= */
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log("Server çalışıyor");
+  console.log("Server çalışıyor...");
 });
